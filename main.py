@@ -7,8 +7,8 @@ import sys
 
 pygame.init()
 
-FPS = 30
-WIDTH, HEIGHT = 650, 450
+FPS = 10
+WIDTH, HEIGHT = 400, 400
 STEP = 10
 screen = pygame.display.set_mode((WIDTH, HEIGHT))
 clock = pygame.time.Clock()
@@ -43,6 +43,13 @@ def main():
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_PAGEUP:
+                    params["z"] = max(2, params["z"] - 1)
+                    update_photo()
+                elif event.key == pygame.K_PAGEDOWN:
+                    params["z"] = min(21, params["z"] + 1)
+                    update_photo()
         screen.blit(photo, (0, 0))
         pygame.display.flip()
         clock.tick(FPS)
