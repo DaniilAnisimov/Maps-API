@@ -36,6 +36,13 @@ def update_photo():
     photo = pygame.image.load(BytesIO(response.content))
 
 
+def change_coordinates(x, y):
+    global coordinates
+    coordinates = [x, y]
+    params["ll"] = ",".join(map(str, coordinates))
+    update_photo()
+
+
 def main():
     running = True
     update_photo()
@@ -50,6 +57,14 @@ def main():
                 elif event.key == pygame.K_PAGEDOWN:
                     params["z"] = min(21, params["z"] + 1)
                     update_photo()
+                elif event.key == pygame.K_RIGHT:
+                    change_coordinates(min(coordinates[0] + 0.00015 * 2 ** (21 - params["z"]), 180), coordinates[1])
+                elif event.key == pygame.K_LEFT:
+                    change_coordinates(max(coordinates[0] - 0.00015 * 2 ** (21 - params["z"]), -180), coordinates[1])
+                elif event.key == pygame.K_UP:
+                    change_coordinates(coordinates[0], min(coordinates[1] + 0.00015 * 2 ** (21 - params["z"]), 180))
+                elif event.key == pygame.K_DOWN:
+                    change_coordinates(coordinates[0], max(coordinates[1] - 0.00015 * 2 ** (21 - params["z"]), -180))
         screen.blit(photo, (0, 0))
         pygame.display.flip()
         clock.tick(FPS)
