@@ -9,7 +9,7 @@ import os
 pygame.init()
 
 FPS = 60
-WIDTH, HEIGHT = 500, 400
+WIDTH, HEIGHT = 500, 430
 screen = pygame.display.set_mode((WIDTH, HEIGHT))
 clock = pygame.time.Clock()
 coordinates = [48.031431, 46.349672]
@@ -18,6 +18,7 @@ params = {"ll": ",".join(map(str, coordinates)), "z": 9, "size": "400,400", "l":
 photo = None
 
 api_server = "http://static-maps.yandex.ru/1.x/"
+geocoder_api_server = "http://geocode-maps.yandex.ru/1.x/"
 
 game_folder = os.path.dirname(__file__)
 font_folder = os.path.join(game_folder, "data/fonts")
@@ -35,13 +36,16 @@ class Button:
         self.message = message
         self.action, self.parameters = action, kwargs
         self.f_type = f_type
+        self.show = True
 
     # action - функция которую нужно выполнить при нажатии на кнопку
     def draw(self):
+        if not self.show:
+            return
         mouse = pygame.mouse.get_pos()
         click = pygame.mouse.get_pressed()
         draw_text(self.x, self.y, self.message, size=self.height, f_type=self.f_type)
-        if self.x < mouse[0] < self.x + self.width and self.y < mouse[1] < self.y + self.height\
+        if self.x < mouse[0] < self.x + self.width and self.y < mouse[1] < self.y + self.height \
                 and click[0] == 1 and self.action:
             self.action(**self.parameters) if self.parameters else self.action()
 
@@ -77,22 +81,53 @@ def change_layers(layer="map"):
 
 def main():
     running = True
+
     update_photo()
-    button_scheme = Button(90, 20, 410, 5, "схема", action=change_layers, layer="map")
-    button_satellite = Button(90, 20, 410, 35, "спутник", action=change_layers, layer="sat")
-    button_hybrid = Button(90, 20, 410, 65, "гибрид", action=change_layers, layer="sat,skl")
+
+    button_scheme = Button(90, 20, 410, 25, "схема", action=change_layers, layer="map")
+    button_satellite = Button(90, 20, 410, 50, "спутник", action=change_layers, layer="sat")
+    button_hybrid = Button(90, 20, 410, 75, "гибрид", action=change_layers, layer="sat,skl")
+
+    need_input = False
+    input_text = "Нажмите TAB для ввода запроса"
 
     while running:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
-            if event.type == pygame.KEYDOWN:
+            if need_input and event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_RETURN:
+                    geocoder_params = {
+                        "apikey": "...",
+                        "geocode": input_text,
+                        "format": "json"}
+                    response = requests.get(geocoder_api_server, params=geocoder_params)
+                    json_response = response.json()
+                    toponym = json_response["response"]["GeoObjectCollection"][
+                        "featureMember"][0]["GeoObject"]
+                    toponym_coodrinates = toponym["Point"]["pos"]
+                    toponym_longitude, toponym_lattitude = toponym_coodrinates.split(" ")
+
+                    params["pt"] = f"{','.join([toponym_longitude, toponym_lattitude])},flag"
+                    change_coordinates(float(toponym_longitude), float(toponym_lattitude))
+
+                    need_input = False
+                    input_text = "Нажмите TAB для ввода запроса"
+                elif event.key == pygame.K_BACKSPACE:
+                    input_text = input_text[:-1]
+                else:
+                    if len(input_text) < 40:
+                        input_text += event.unicode
+            elif event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_PAGEUP:
                     params["z"] = max(2, params["z"] - 1)
                     update_photo()
                 elif event.key == pygame.K_PAGEDOWN:
                     params["z"] = min(21, params["z"] + 1)
                     update_photo()
+                elif event.key == pygame.K_TAB:
+                    need_input = True
+                    input_text = ""
                 elif event.key == pygame.K_RIGHT:
                     change_coordinates(min(coordinates[0] + 0.00015 * 2 ** (21 - params["z"]), 180), coordinates[1])
                 elif event.key == pygame.K_LEFT:
@@ -102,11 +137,13 @@ def main():
                 elif event.key == pygame.K_DOWN:
                     change_coordinates(coordinates[0], max(coordinates[1] - 0.00015 * 2 ** (21 - params["z"]), -90))
         screen.fill((230, 230, 230))
-        screen.blit(photo, (0, 0))
+        screen.blit(photo, (0, 30))
 
         button_satellite.draw()
         button_scheme.draw()
         button_hybrid.draw()
+
+        draw_text(2, 2, input_text, size=20)
 
         pygame.display.flip()
         clock.tick(FPS)
