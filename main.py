@@ -24,6 +24,11 @@ game_folder = os.path.dirname(__file__)
 font_folder = os.path.join(game_folder, "data/fonts")
 
 
+standard_text = "Нажмите TAB для ввода запроса"
+need_input = False
+input_text = standard_text
+
+
 def terminate():
     pygame.quit()
     sys.exit()
@@ -79,7 +84,15 @@ def change_layers(layer="map"):
     update_photo()
 
 
+def reset_request():
+    global need_input
+    need_input = False
+    params.pop("pt", None)
+    update_photo()
+
+
 def main():
+    global need_input, input_text
     running = True
 
     update_photo()
@@ -87,9 +100,7 @@ def main():
     button_scheme = Button(90, 20, 410, 25, "схема", action=change_layers, layer="map")
     button_satellite = Button(90, 20, 410, 50, "спутник", action=change_layers, layer="sat")
     button_hybrid = Button(90, 20, 410, 75, "гибрид", action=change_layers, layer="sat,skl")
-
-    need_input = False
-    input_text = "Нажмите TAB для ввода запроса"
+    reset = Button(90, 20, 410, 2, "Сброс", action=reset_request)
 
     while running:
         for event in pygame.event.get():
@@ -97,26 +108,28 @@ def main():
                 running = False
             if need_input and event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_RETURN:
-                    geocoder_params = {
-                        "apikey": "...",
-                        "geocode": input_text,
-                        "format": "json"}
-                    response = requests.get(geocoder_api_server, params=geocoder_params)
-                    json_response = response.json()
-                    toponym = json_response["response"]["GeoObjectCollection"][
-                        "featureMember"][0]["GeoObject"]
-                    toponym_coodrinates = toponym["Point"]["pos"]
-                    toponym_longitude, toponym_lattitude = toponym_coodrinates.split(" ")
+                    try:
+                        geocoder_params = {
+                            "apikey": "",
+                            "geocode": input_text,
+                            "format": "json"}
+                        response = requests.get(geocoder_api_server, params=geocoder_params)
+                        json_response = response.json()
+                        toponym = json_response["response"]["GeoObjectCollection"][
+                            "featureMember"][0]["GeoObject"]
+                        toponym_coodrinates = toponym["Point"]["pos"]
+                        toponym_longitude, toponym_lattitude = toponym_coodrinates.split(" ")
 
-                    params["pt"] = f"{','.join([toponym_longitude, toponym_lattitude])},flag"
-                    change_coordinates(float(toponym_longitude), float(toponym_lattitude))
-
-                    need_input = False
-                    input_text = "Нажмите TAB для ввода запроса"
+                        params["pt"] = f"{','.join([toponym_longitude, toponym_lattitude])},flag"
+                        change_coordinates(float(toponym_longitude), float(toponym_lattitude))
+                    except Exception:
+                        print("Ошибка запроса")
+                    finally:
+                        need_input = False
                 elif event.key == pygame.K_BACKSPACE:
                     input_text = input_text[:-1]
                 else:
-                    if len(input_text) < 40:
+                    if len(input_text) < 30:
                         input_text += event.unicode
             elif event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_PAGEUP:
@@ -142,8 +155,9 @@ def main():
         button_satellite.draw()
         button_scheme.draw()
         button_hybrid.draw()
+        reset.draw()
 
-        draw_text(2, 2, input_text, size=20)
+        draw_text(2, 2, input_text if need_input else standard_text, size=20)
 
         pygame.display.flip()
         clock.tick(FPS)
