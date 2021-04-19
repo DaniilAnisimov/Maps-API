@@ -1,3 +1,4 @@
+import json
 from io import BytesIO
 import requests
 
@@ -9,7 +10,7 @@ import os
 pygame.init()
 
 FPS = 60
-WIDTH, HEIGHT = 500, 460
+WIDTH, HEIGHT = 600, 480
 screen = pygame.display.set_mode((WIDTH, HEIGHT))
 clock = pygame.time.Clock()
 coordinates = [48.031431, 46.349672]
@@ -23,9 +24,10 @@ geocoder_api_server = "http://geocode-maps.yandex.ru/1.x/"
 game_folder = os.path.dirname(__file__)
 font_folder = os.path.join(game_folder, "data/fonts")
 
-
 standard_text = "Нажмите TAB для ввода запроса"
 address = ""
+postal_code = ""
+need_postal_code = False
 need_input = False
 input_text = standard_text
 
@@ -85,16 +87,22 @@ def change_layers(layer="map"):
     update_photo()
 
 
+def change_need_postal_code(tof=True):
+    global need_postal_code
+    need_postal_code = tof
+
+
 def reset_request():
-    global need_input, address
+    global need_input, address, postal_code
     need_input = False
     params.pop("pt", None)
     address = ""
+    postal_code = ""
     update_photo()
 
 
 def main():
-    global need_input, input_text, address
+    global need_input, input_text, address, postal_code
     running = True
 
     update_photo()
@@ -103,6 +111,8 @@ def main():
     button_satellite = Button(90, 20, 410, 50, "спутник", action=change_layers, layer="sat")
     button_hybrid = Button(90, 20, 410, 75, "гибрид", action=change_layers, layer="sat,skl")
     reset = Button(90, 20, 410, 2, "Сброс", action=reset_request)
+    turn_on = Button(50, 16, 410, 375, "вкл", action=change_need_postal_code, tof=True)
+    turn_off = Button(50, 16, 410, 390, "выкл", action=change_need_postal_code, tof=False)
 
     while running:
         for event in pygame.event.get():
@@ -126,11 +136,16 @@ def main():
                             "Address"]
                         address = toponym_address["formatted"]
 
+                        if "postal_code" in toponym_address:
+                            postal_code = "Почтовый индекс: " + toponym_address["postal_code"]
+                        else:
+                            postal_code = "Почтовый индекс для данного адреса не обнаружен"
+
                         params["pt"] = f"{','.join([toponym_longitude, toponym_lattitude])},flag"
                         change_coordinates(float(toponym_longitude), float(toponym_lattitude))
 
-                    except Exception:
-                        print("Ошибка запроса")
+                    except Exception as e:
+                        print("Ошибка:", e)
                     finally:
                         need_input = False
                 elif event.key == pygame.K_BACKSPACE:
@@ -162,10 +177,15 @@ def main():
         button_satellite.draw()
         button_scheme.draw()
         button_hybrid.draw()
+        turn_on.draw()
+        turn_off.draw()
         reset.draw()
 
         draw_text(2, 2, input_text if need_input else standard_text, size=20)
         draw_text(2, 435, address, size=15)
+        if need_postal_code:
+            draw_text(2, 455, postal_code, size=15)
+        draw_text(405, 360, "Почтовый индекс: вкл" if need_postal_code else "Почтовый индекс: выкл", size=15)
 
         pygame.display.flip()
         clock.tick(FPS)
