@@ -9,7 +9,7 @@ import os
 pygame.init()
 
 FPS = 60
-WIDTH, HEIGHT = 500, 430
+WIDTH, HEIGHT = 500, 460
 screen = pygame.display.set_mode((WIDTH, HEIGHT))
 clock = pygame.time.Clock()
 coordinates = [48.031431, 46.349672]
@@ -25,6 +25,7 @@ font_folder = os.path.join(game_folder, "data/fonts")
 
 
 standard_text = "Нажмите TAB для ввода запроса"
+address = ""
 need_input = False
 input_text = standard_text
 
@@ -85,14 +86,15 @@ def change_layers(layer="map"):
 
 
 def reset_request():
-    global need_input
+    global need_input, address
     need_input = False
     params.pop("pt", None)
+    address = ""
     update_photo()
 
 
 def main():
-    global need_input, input_text
+    global need_input, input_text, address
     running = True
 
     update_photo()
@@ -120,8 +122,13 @@ def main():
                         toponym_coodrinates = toponym["Point"]["pos"]
                         toponym_longitude, toponym_lattitude = toponym_coodrinates.split(" ")
 
+                        toponym_address = toponym["metaDataProperty"]["GeocoderMetaData"][
+                            "Address"]
+                        address = toponym_address["formatted"]
+
                         params["pt"] = f"{','.join([toponym_longitude, toponym_lattitude])},flag"
                         change_coordinates(float(toponym_longitude), float(toponym_lattitude))
+
                     except Exception:
                         print("Ошибка запроса")
                     finally:
@@ -158,6 +165,7 @@ def main():
         reset.draw()
 
         draw_text(2, 2, input_text if need_input else standard_text, size=20)
+        draw_text(2, 435, address, size=15)
 
         pygame.display.flip()
         clock.tick(FPS)
