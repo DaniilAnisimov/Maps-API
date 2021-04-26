@@ -1,3 +1,4 @@
+import math
 from io import BytesIO
 import requests
 
@@ -9,7 +10,7 @@ import os
 pygame.init()
 
 FPS = 60
-WIDTH, HEIGHT = 600, 480
+WIDTH, HEIGHT = 600, 520
 screen = pygame.display.set_mode((WIDTH, HEIGHT))
 clock = pygame.time.Clock()
 coordinates = [48.031431, 46.349672]
@@ -19,6 +20,10 @@ photo = None
 
 api_server = "http://static-maps.yandex.ru/1.x/"
 geocoder_api_server = "http://geocode-maps.yandex.ru/1.x/"
+search_api_server = "https://search-maps.yandex.ru/v1/"
+
+geocoder_api_key = ""
+search_api_key = ""
 
 game_folder = os.path.dirname(__file__)
 font_folder = os.path.join(game_folder, "data/fonts")
@@ -26,6 +31,8 @@ font_folder = os.path.join(game_folder, "data/fonts")
 standard_text = "Нажмите TAB для ввода запроса"
 address = ""
 postal_code = ""
+org_name = ""
+org_address = ""
 need_postal_code = False
 need_input = False
 input_text = standard_text
@@ -92,16 +99,37 @@ def change_need_postal_code(tof=True):
 
 
 def reset_request():
-    global need_input, address, postal_code
+    global need_input, address, postal_code, org_name, org_address
     need_input = False
     params.pop("pt", None)
     address = ""
     postal_code = ""
+    org_name = ""
+    org_address = ""
     update_photo()
 
 
+def lonlat_distance(a, b):
+    degree_to_meters_factor = 111 * 1000  # 111 километров в метрах
+    a_lon, a_lat = a
+    b_lon, b_lat = b
+
+    # Берем среднюю по широте точку и считаем коэффициент для нее.
+    radians_lattitude = math.radians((a_lat + b_lat) / 2.)
+    lat_lon_factor = math.cos(radians_lattitude)
+
+    # Вычисляем смещения в метрах по вертикали и горизонтали.
+    dx = abs(a_lon - b_lon) * degree_to_meters_factor * lat_lon_factor
+    dy = abs(a_lat - b_lat) * degree_to_meters_factor
+
+    # Вычисляем расстояние между точками.
+    distance = math.sqrt(dx * dx + dy * dy)
+
+    return distance
+
+
 def main():
-    global need_input, input_text, address, postal_code, coordinates
+    global need_input, input_text, address, postal_code, coordinates, org_name, org_address
     running = True
 
     update_photo()
@@ -131,12 +159,12 @@ def main():
                 ny -= y * k / 2
                 nx += x * k
 
-                if event.button == 1:
-                    reset_request()
-                    params["pt"] = f"{','.join([str(nx), str(ny)])},flag"
+                reset_request()
+                params["pt"] = f"{','.join([str(nx), str(ny)])},flag"
 
+                if event.button == 1:
                     geocoder_params = {
-                        "apikey": "",
+                        "apikey": geocoder_api_key,
                         "geocode": ','.join([str(nx), str(ny)]),
                         "format": "json"}
                     response = requests.get(geocoder_api_server, params=geocoder_params)
@@ -153,10 +181,33 @@ def main():
                         postal_code = "Почтовый индекс: " + toponym_address["postal_code"]
                     else:
                         postal_code = "Почтовый индекс для данного адреса не обнаружен"
-
-                    update_photo()
                 elif event.button == 3:
-                    pass
+                    search_params = {
+                        "apikey": search_api_key,
+                        "text": "аптека",
+                        "lang": "ru_RU",
+                        "ll": ','.join([str(nx), str(ny)]),
+                        "type": "biz"
+                    }
+                    response = requests.get(search_api_server, params=search_params)
+                    json_response = response.json()
+
+                    # Получаем первую найденную организацию.
+                    for organization in json_response["features"]:
+                        print(lonlat_distance(([nx, ny]),
+                                           tuple(map(float, organization["geometry"]["coordinates"]))))
+                        if lonlat_distance(([nx, ny]),
+                                           tuple(map(float, organization["geometry"]["coordinates"]))) <= 50:
+                            # Название организации.
+                            org_name = organization["properties"]["CompanyMetaData"]["name"]
+                            # Адрес организации.
+                            org_address = organization["properties"]["CompanyMetaData"]["address"]
+                            break
+
+                    if not org_name:
+                        org_name = "В данном радиусе не было найдено организаций"
+
+                update_photo()
             if need_input and event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_RETURN:
                     try:
@@ -225,6 +276,8 @@ def main():
         if need_postal_code:
             draw_text(2, 455, postal_code, size=15)
         draw_text(405, 360, "Почтовый индекс: вкл" if need_postal_code else "Почтовый индекс: выкл", size=15)
+        draw_text(2, 470, org_name, size=15)
+        draw_text(2, 490, org_address, size=15)
 
         pygame.display.flip()
         clock.tick(FPS)
