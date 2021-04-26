@@ -1,4 +1,3 @@
-import json
 from io import BytesIO
 import requests
 
@@ -102,7 +101,7 @@ def reset_request():
 
 
 def main():
-    global need_input, input_text, address, postal_code
+    global need_input, input_text, address, postal_code, coordinates
     running = True
 
     update_photo()
@@ -118,6 +117,46 @@ def main():
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                x, y = event.pos
+                if x > 400 or not (30 <= y <= 430):
+                    continue
+                y -= 30
+
+                nx, ny = coordinates
+                k = 2 ** (params["z"] + 8)
+                k = 400 / k
+                nx -= 200 * k
+                ny += 100 * k
+                ny -= y * k / 2
+                nx += x * k
+
+                if event.button == 1:
+                    reset_request()
+                    params["pt"] = f"{','.join([str(nx), str(ny)])},flag"
+
+                    geocoder_params = {
+                        "apikey": "",
+                        "geocode": ','.join([str(nx), str(ny)]),
+                        "format": "json"}
+                    response = requests.get(geocoder_api_server, params=geocoder_params)
+                    json_response = response.json()
+
+                    toponym = json_response["response"]["GeoObjectCollection"][
+                        "featureMember"][0]["GeoObject"]
+
+                    toponym_address = toponym["metaDataProperty"]["GeocoderMetaData"][
+                        "Address"]
+                    address = toponym_address["formatted"]
+
+                    if "postal_code" in toponym_address:
+                        postal_code = "Почтовый индекс: " + toponym_address["postal_code"]
+                    else:
+                        postal_code = "Почтовый индекс для данного адреса не обнаружен"
+
+                    update_photo()
+                elif event.button == 3:
+                    pass
             if need_input and event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_RETURN:
                     try:
